@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#0b1020">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>OBS Remote</title>
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">TAILSCALE REMOTE</p>
+          <h1>OBS Remote</h1>
+        </div>
+        <button id="settings-button" class="icon-button" type="button" aria-label="設定">⚙</button>
+      </header>
+
+      <section class="connection-bar" aria-live="polite">
+        <span id="connection-dot" class="status-dot"></span>
+        <span id="connection-label">接続確認中</span>
+        <button id="refresh-button" class="text-button" type="button">更新</button>
+      </section>
+
+      <div id="error-banner" class="error-banner" role="alert" hidden></div>
+
+      <section class="card hero-card">
+        <div class="card-heading">
+          <div>
+            <p class="section-label">STREAM</p>
+            <h2 id="stream-status">状態を確認中</h2>
+          </div>
+          <span id="stream-live-badge" class="live-badge" hidden>LIVE</span>
+        </div>
+        <p id="stream-detail" class="muted-text">OBSから配信状態を取得します。</p>
+        <button id="stream-button" class="primary-button" type="button" disabled>配信操作</button>
+      </section>
+
+      <section class="card">
+        <div class="card-heading">
+          <div>
+            <p class="section-label">SCENES</p>
+            <h2>シーン切り替え</h2>
+          </div>
+          <span id="scene-count" class="count-badge">0</span>
+        </div>
+        <div id="scene-grid" class="scene-grid">
+          <p class="empty-state">OBSへ接続するとシーンが表示されます。</p>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-heading">
+          <div>
+            <p class="section-label">AUDIO</p>
+            <h2>音声ミュート</h2>
+          </div>
+          <span id="audio-count" class="count-badge">0</span>
+        </div>
+        <div id="audio-list" class="audio-list">
+          <p class="empty-state">OBSへ接続すると音声入力が表示されます。</p>
+        </div>
+      </section>
+
+      <footer>
+        <span id="updated-at">未更新</span>
+        <button id="reconnect-button" class="text-button" type="button">OBSへ再接続</button>
+      </footer>
+    </main>
+
+    <dialog id="settings-dialog" class="dialog">
+      <form id="settings-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="section-label">AUTHENTICATION</p>
+            <h2>操作トークン</h2>
+          </div>
+          <button id="settings-close" class="icon-button" type="button" aria-label="閉じる">×</button>
+        </div>
+        <p class="muted-text">Mac側の <code>.env</code> にある <code>REMOTE_CONTROL_TOKEN</code> を入力します。</p>
+        <label class="field-label" for="token-input">トークン</label>
+        <input id="token-input" name="token" type="password" minlength="32" autocomplete="off" required>
+        <div class="dialog-actions">
+          <button id="token-delete" class="secondary-button danger-text" type="button">削除</button>
+          <button class="primary-button compact" type="submit">保存</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="confirm-dialog" class="dialog confirm-dialog">
+      <form method="dialog">
+        <p class="section-label">CONFIRM</p>
+        <h2 id="confirm-title">操作を確認</h2>
+        <p id="confirm-message" class="muted-text"></p>
+        <div class="dialog-actions">
+          <button value="cancel" class="secondary-button">キャンセル</button>
+          <button id="confirm-accept" value="confirm" class="primary-button compact">実行</button>
+        </div>
+      </form>
+    </dialog>
+  </body>
+</html>

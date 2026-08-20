@@ -1,0 +1,21 @@
+{
+  "name": "obs-remote-controller",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tailscale-friendly mobile web controller for OBS Studio on macOS.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.0"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "setup": "node scripts/setup.mjs",
+    "check": "node scripts/check-syntax.mjs",
+    "test": "node --test",
+    "install:launch-agent": "node scripts/install-launch-agent.mjs",
+    "uninstall:launch-agent": "node scripts/uninstall-launch-agent.mjs",
+    "tailscale:serve": "node scripts/tailscale-serve.mjs on",
+    "tailscale:serve:off": "node scripts/tailscale-serve.mjs off"
+  }
+}
