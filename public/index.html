@@ -45,6 +45,68 @@
       <section class="card">
         <div class="card-heading">
           <div>
+            <p class="section-label">OVERLAY</p>
+            <h2>文字オーバーレイ</h2>
+          </div>
+          <span id="overlay-status" class="count-badge">非表示</span>
+        </div>
+        <form id="overlay-form" class="overlay-form">
+          <label class="field-label" for="overlay-text">表示する文字</label>
+          <textarea id="overlay-text" rows="3" maxlength="500" placeholder="例: ただいま準備中です" required></textarea>
+
+          <div class="overlay-grid">
+            <label class="control-field">
+              <span>位置</span>
+              <select id="overlay-position">
+                <option value="top">上</option>
+                <option value="center">中央</option>
+                <option value="bottom">下</option>
+              </select>
+            </label>
+            <label class="control-field">
+              <span>表示時間</span>
+              <select id="overlay-duration">
+                <option value="0">無期限</option>
+                <option value="5000">5秒</option>
+                <option value="10000">10秒</option>
+                <option value="30000">30秒</option>
+                <option value="60000">60秒</option>
+              </select>
+            </label>
+            <label class="control-field">
+              <span>アニメーション</span>
+              <select id="overlay-animation">
+                <option value="fade">フェード</option>
+                <option value="none">なし</option>
+              </select>
+            </label>
+            <label class="control-field color-field">
+              <span>文字色</span>
+              <input id="overlay-color" type="color" value="#ffffff" aria-label="文字色">
+            </label>
+          </div>
+
+          <label class="range-field" for="overlay-font-size">
+            <span>文字サイズ <output id="overlay-font-size-value">64px</output></span>
+            <input id="overlay-font-size" type="range" min="18" max="180" step="1" value="64">
+          </label>
+
+          <label class="check-field">
+            <input id="overlay-background" type="checkbox" checked>
+            <span>文字の背景を表示</span>
+          </label>
+
+          <p class="muted-text overlay-help">OBSのBrowser Sourceに <code>http://127.0.0.1:8787/overlay/</code> を設定するとリアルタイムで反映されます。</p>
+          <div class="overlay-actions">
+            <button id="overlay-hide-button" class="secondary-button" type="button">非表示</button>
+            <button id="overlay-show-button" class="primary-button compact" type="submit">表示 / 更新</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="card">
+        <div class="card-heading">
+          <div>
             <p class="section-label">SCENES</p>
             <h2>シーン切り替え</h2>
           </div>

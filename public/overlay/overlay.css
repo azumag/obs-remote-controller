@@ -1,0 +1,61 @@
+:root {
+  --overlay-font-size: 64px;
+  --overlay-color: #ffffff;
+}
+
+* { box-sizing: border-box; }
+html, body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+}
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans JP", sans-serif; }
+
+.overlay-layer {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  padding: clamp(32px, 5vh, 96px) clamp(32px, 5vw, 120px);
+  pointer-events: none;
+}
+body[data-position="top"] .overlay-layer { align-items: flex-start; }
+body[data-position="center"] .overlay-layer { align-items: center; }
+body[data-position="bottom"] .overlay-layer { align-items: flex-end; }
+
+.overlay-text {
+  max-width: min(92vw, 1700px);
+  padding: 0.18em 0.34em;
+  border-radius: 0.22em;
+  color: var(--overlay-color);
+  font-size: var(--overlay-font-size);
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+  text-align: center;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  opacity: 0;
+  transform: translateY(0.18em) scale(0.99);
+  text-shadow: 0 0.04em 0.12em rgba(0, 0, 0, 0.9), 0 0.08em 0.32em rgba(0, 0, 0, 0.65);
+}
+.overlay-layer.has-background .overlay-text {
+  padding: 0.28em 0.5em;
+  background: rgba(0, 0, 0, 0.72);
+  box-shadow: 0 0.1em 0.35em rgba(0, 0, 0, 0.35);
+}
+.overlay-layer.animation-fade .overlay-text {
+  transition: opacity 220ms ease, transform 220ms ease;
+}
+.overlay-layer.animation-none .overlay-text { transition: none; }
+.overlay-layer.visible .overlay-text {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay-text { transition: none !important; }
+}

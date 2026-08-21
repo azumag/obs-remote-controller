@@ -4,6 +4,7 @@ import { createServer } from 'node:http';
 import { extname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ObsUnavailableError } from './obs-controller.js';
+import { OverlayController } from './overlay-controller.js';
 
 const DEFAULT_PUBLIC_DIR = resolve(fileURLToPath(new URL('../public', import.meta.url)));
 const MAX_BODY_BYTES = 16 * 1024;
@@ -15,6 +16,8 @@ const TYPES = new Map([
   ['.svg', 'image/svg+xml; charset=utf-8'],
   ['.webmanifest', 'application/manifest+json; charset=utf-8'],
 ]);
+const OVERLAY_POSITIONS = new Set(['top', 'center', 'bottom']);
+const OVERLAY_ANIMATIONS = new Set(['fade', 'none']);
 
 class HttpError extends Error {
   constructor(statusCode, code, message) {
@@ -36,12 +39,12 @@ function securityHeaders(response) {
 }
 
 function json(response, statusCode, value) {
-  const body = JSON.stringify(value);
+  const content = JSON.stringify(value);
   response.statusCode = statusCode;
   response.setHeader('Content-Type', 'application/json; charset=utf-8');
   response.setHeader('Cache-Control', 'no-store');
-  response.setHeader('Content-Length', Buffer.byteLength(body));
-  response.end(body);
+  response.setHeader('Content-Length', Buffer.byteLength(content));
+  response.end(content);
 }
 
 function bearer(request) {
@@ -80,6 +83,57 @@ function string(value, name) {
   return value;
 }
 
+function overlayPatch(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new HttpError(400, 'INVALID_REQUEST', 'オーバーレイ設定はJSONオブジェクトで指定してください');
+  }
+
+  const patch = {};
+  if ('visible' in input) patch.visible = boolean(input.visible, 'visible');
+  if ('text' in input) {
+    if (typeof input.text !== 'string' || input.text.length > 500) {
+      throw new HttpError(400, 'INVALID_REQUEST', 'textは500文字以内の文字列で指定してください');
+    }
+    patch.text = input.text;
+  }
+  if ('position' in input) {
+    if (!OVERLAY_POSITIONS.has(input.position)) {
+      throw new HttpError(400, 'INVALID_REQUEST', 'positionはtop、center、bottomのいずれかで指定してください');
+    }
+    patch.position = input.position;
+  }
+  if ('fontSize' in input) {
+    if (!Number.isInteger(input.fontSize) || input.fontSize < 18 || input.fontSize > 180) {
+      throw new HttpError(400, 'INVALID_REQUEST', 'fontSizeは18〜180の整数で指定してください');
+    }
+    patch.fontSize = input.fontSize;
+  }
+  if ('color' in input) {
+    if (typeof input.color !== 'string' || !/^#[0-9a-f]{6}$/iu.test(input.color)) {
+      throw new HttpError(400, 'INVALID_REQUEST', 'colorは#RRGGBB形式で指定してください');
+    }
+    patch.color = input.color.toLowerCase();
+  }
+  if ('background' in input) patch.background = boolean(input.background, 'background');
+  if ('animation' in input) {
+    if (!OVERLAY_ANIMATIONS.has(input.animation)) {
+      throw new HttpError(400, 'INVALID_REQUEST', 'animationはfadeまたはnoneで指定してください');
+    }
+    patch.animation = input.animation;
+  }
+  if ('durationMs' in input) {
+    if (!Number.isInteger(input.durationMs) || input.durationMs < 0 || input.durationMs > 600_000) {
+      throw new HttpError(400, 'INVALID_REQUEST', 'durationMsは0〜600000の整数で指定してください');
+    }
+    patch.durationMs = input.durationMs;
+  }
+
+  if (Object.keys(patch).length === 0) {
+    throw new HttpError(400, 'INVALID_REQUEST', '変更するオーバーレイ設定を指定してください');
+  }
+  return patch;
+}
+
 function serveStatic(request, response, publicDirectory, pathname) {
   if (request.method !== 'GET' && request.method !== 'HEAD') return false;
 
@@ -88,7 +142,8 @@ function serveStatic(request, response, publicDirectory, pathname) {
   catch { throw new HttpError(400, 'INVALID_PATH', 'URLの形式が正しくありません'); }
   if (decoded.includes('\0')) throw new HttpError(400, 'INVALID_PATH', 'URLの形式が正しくありません');
 
-  const relative = decoded === '/' ? 'index.html' : decoded.replace(/^\/+/, '');
+  let relative = decoded === '/' ? 'index.html' : decoded.replace(/^\/+/, '');
+  if (relative.endsWith('/')) relative += 'index.html';
   const filePath = resolve(publicDirectory, relative);
   if (filePath !== publicDirectory && !filePath.startsWith(`${publicDirectory}${sep}`)) return false;
 
@@ -96,16 +151,58 @@ function serveStatic(request, response, publicDirectory, pathname) {
   try { stats = statSync(filePath); } catch { return false; }
   if (!stats.isFile()) return false;
 
+  const noCache = extname(filePath) === '.html' || relative.startsWith('overlay/');
   response.statusCode = 200;
   response.setHeader('Content-Type', TYPES.get(extname(filePath)) ?? 'application/octet-stream');
   response.setHeader('Content-Length', stats.size);
-  response.setHeader('Cache-Control', extname(filePath) === '.html' ? 'no-cache' : 'public, max-age=3600');
+  response.setHeader('Cache-Control', noCache ? 'no-cache' : 'public, max-age=3600');
   if (request.method === 'HEAD') response.end();
   else createReadStream(filePath).pipe(response);
   return true;
 }
 
-export function createHttpServer({ controller, remoteControlToken, publicDirectory = DEFAULT_PUBLIC_DIR, logger = console }) {
+function serveOverlayEvents(request, response, overlayController) {
+  if (request.method !== 'GET') throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'このメソッドは使用できません');
+  response.statusCode = 200;
+  response.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+  response.setHeader('Cache-Control', 'no-cache, no-transform');
+  response.setHeader('Connection', 'keep-alive');
+  response.flushHeaders?.();
+
+  const sendState = (state) => {
+    if (!response.destroyed && !response.writableEnded) {
+      response.write(`event: state\ndata: ${JSON.stringify(state)}\n\n`);
+    }
+  };
+  const close = () => {
+    cleanup();
+    if (!response.writableEnded) response.end();
+  };
+  const keepAlive = setInterval(() => {
+    if (!response.destroyed && !response.writableEnded) response.write(': keepalive\n\n');
+  }, 15_000);
+  keepAlive.unref?.();
+
+  const cleanup = () => {
+    clearInterval(keepAlive);
+    overlayController.off('state', sendState);
+    overlayController.off('close', close);
+  };
+  overlayController.on('state', sendState);
+  overlayController.on('close', close);
+  request.on('close', cleanup);
+
+  response.write('retry: 2000\n\n');
+  sendState(overlayController.getState());
+}
+
+export function createHttpServer({
+  controller,
+  remoteControlToken,
+  overlayController = new OverlayController(),
+  publicDirectory = DEFAULT_PUBLIC_DIR,
+  logger = console,
+}) {
   const expectedToken = digest(remoteControlToken);
 
   return createServer(async (request, response) => {
@@ -120,6 +217,10 @@ export function createHttpServer({ controller, remoteControlToken, publicDirecto
         return json(response, 200, { ok: true, obsConnected: Boolean(controller.connected) });
       }
 
+      if (path === '/overlay/events') {
+        return serveOverlayEvents(request, response, overlayController);
+      }
+
       if (path.startsWith('/api/')) {
         const token = bearer(request);
         if (!token || !timingSafeEqual(digest(token), expectedToken)) {
@@ -128,7 +229,17 @@ export function createHttpServer({ controller, remoteControlToken, publicDirecto
         }
 
         if (path === '/api/state' && request.method === 'GET') {
-          return json(response, 200, await controller.getState());
+          return json(response, 200, {
+            ...(await controller.getState()),
+            overlay: overlayController.getState(),
+          });
+        }
+        if (path === '/api/overlay' && request.method === 'GET') {
+          return json(response, 200, overlayController.getState());
+        }
+        if (path === '/api/overlay' && request.method === 'PUT') {
+          const input = await body(request);
+          return json(response, 200, { ok: true, result: overlayController.update(overlayPatch(input)) });
         }
         if (path === '/api/stream' && request.method === 'POST') {
           const input = await body(request);
