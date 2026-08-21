@@ -9,6 +9,18 @@ const elements = {
   streamDetail: document.querySelector('#stream-detail'),
   streamBadge: document.querySelector('#stream-live-badge'),
   streamButton: document.querySelector('#stream-button'),
+  overlayForm: document.querySelector('#overlay-form'),
+  overlayStatus: document.querySelector('#overlay-status'),
+  overlayText: document.querySelector('#overlay-text'),
+  overlayPosition: document.querySelector('#overlay-position'),
+  overlayDuration: document.querySelector('#overlay-duration'),
+  overlayAnimation: document.querySelector('#overlay-animation'),
+  overlayColor: document.querySelector('#overlay-color'),
+  overlayFontSize: document.querySelector('#overlay-font-size'),
+  overlayFontSizeValue: document.querySelector('#overlay-font-size-value'),
+  overlayBackground: document.querySelector('#overlay-background'),
+  overlayShowButton: document.querySelector('#overlay-show-button'),
+  overlayHideButton: document.querySelector('#overlay-hide-button'),
   sceneGrid: document.querySelector('#scene-grid'),
   sceneCount: document.querySelector('#scene-count'),
   audioList: document.querySelector('#audio-list'),
@@ -32,6 +44,7 @@ let token = localStorage.getItem(TOKEN_KEY) ?? '';
 let state = null;
 let refreshPromise = null;
 let busy = false;
+let overlayDirty = false;
 
 function showError(message) {
   elements.errorBanner.textContent = message;
@@ -141,6 +154,34 @@ function renderAudio(inputs) {
   elements.audioList.replaceChildren(fragment);
 }
 
+function renderOverlay(overlay) {
+  const value = overlay ?? {
+    visible: false,
+    text: '',
+    position: 'bottom',
+    durationMs: 0,
+    animation: 'fade',
+    color: '#ffffff',
+    fontSize: 64,
+    background: true,
+  };
+
+  elements.overlayStatus.textContent = value.visible ? '表示中' : '非表示';
+  elements.overlayStatus.className = `count-badge${value.visible ? ' overlay-visible' : ''}`;
+  if (!overlayDirty) {
+    elements.overlayText.value = value.text ?? '';
+    elements.overlayPosition.value = value.position ?? 'bottom';
+    elements.overlayDuration.value = String(value.durationMs ?? 0);
+    elements.overlayAnimation.value = value.animation ?? 'fade';
+    elements.overlayColor.value = value.color ?? '#ffffff';
+    elements.overlayFontSize.value = String(value.fontSize ?? 64);
+    elements.overlayBackground.checked = Boolean(value.background);
+  }
+  elements.overlayFontSizeValue.textContent = `${elements.overlayFontSize.value}px`;
+  elements.overlayShowButton.disabled = busy;
+  elements.overlayHideButton.disabled = busy || !value.visible;
+}
+
 function render(nextState = state) {
   state = nextState;
   const connected = Boolean(state?.obsConnected);
@@ -163,6 +204,7 @@ function render(nextState = state) {
   elements.streamButton.className = `primary-button${live ? ' stop' : ''}`;
   elements.streamButton.disabled = busy || !connected;
 
+  renderOverlay(state?.overlay);
   renderScenes(state?.scenes ?? [], state?.currentScene ?? null);
   renderAudio(state?.audioInputs ?? []);
 
@@ -222,6 +264,36 @@ async function perform(action) {
   }
 }
 
+async function performOverlayUpdate(data) {
+  if (busy) return;
+  busy = true;
+  render();
+  clearError();
+  try {
+    await api('/api/overlay', { method: 'PUT', data });
+    await refresh({ reportError: true, force: true });
+    overlayDirty = false;
+  } catch (error) {
+    showError(error instanceof Error ? error.message : String(error));
+  } finally {
+    busy = false;
+    render();
+  }
+}
+
+function overlayFormData() {
+  return {
+    text: elements.overlayText.value,
+    visible: true,
+    position: elements.overlayPosition.value,
+    durationMs: Number(elements.overlayDuration.value),
+    animation: elements.overlayAnimation.value,
+    color: elements.overlayColor.value,
+    fontSize: Number(elements.overlayFontSize.value),
+    background: elements.overlayBackground.checked,
+  };
+}
+
 elements.streamButton.addEventListener('click', async () => {
   const active = Boolean(state?.stream?.active);
   const accepted = await confirmAction({
@@ -232,6 +304,22 @@ elements.streamButton.addEventListener('click', async () => {
     destructive: active,
   });
   if (accepted) perform(() => api('/api/stream', { method: 'POST', data: { active: !active } }));
+});
+
+elements.overlayForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+  if (!elements.overlayForm.reportValidity()) return;
+  performOverlayUpdate(overlayFormData());
+});
+
+elements.overlayHideButton.addEventListener('click', () => {
+  perform(() => api('/api/overlay', { method: 'PUT', data: { visible: false } }));
+});
+
+elements.overlayForm.addEventListener('input', () => { overlayDirty = true; });
+elements.overlayForm.addEventListener('change', () => { overlayDirty = true; });
+elements.overlayFontSize.addEventListener('input', () => {
+  elements.overlayFontSizeValue.textContent = `${elements.overlayFontSize.value}px`;
 });
 
 elements.sceneGrid.addEventListener('click', (event) => {
